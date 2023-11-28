@@ -17,11 +17,17 @@ func Error1() error {
 	return &error1{}
 }
 
+func temp() interface{} {
+	err := Error1()
+	return &err
+}
+
 func main() {
-	err1 := errors.WithStack(fmt.Errorf("err 1"))
-	err2 := errors.Wrapf(err1, "")
+	err1 := errors.New("")
+	err2 := errors.WithStack(err1)
 	err3 := errors.Wrapf(err2, "err 3")
-	fmt.Printf("%+v\n", err1)
-	fmt.Printf("%+v\n", err2)
+	// fmt.Printf("%+v\n", err1)
+	// fmt.Printf("%+v\n", err2)
 	fmt.Printf("%+v\n", err3)
+
 }
