@@ -23,8 +23,8 @@ func temp() interface{} {
 }
 
 func main() {
-	err1 := errors.New("")
-	err2 := errors.WithStack(err1)
+	err1 := errors.Errorf("%s", "error f")
+	err2 := errors.Wrap(err1, "err 2")
 	err3 := errors.Wrapf(err2, "err 3")
 	// fmt.Printf("%+v\n", err1)
 	// fmt.Printf("%+v\n", err2)
