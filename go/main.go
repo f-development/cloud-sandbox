@@ -1,24 +1,35 @@
 package main
 
 import (
-	"fmt"
+	"log/slog"
+	"os"
 
 	"github.com/pkg/errors"
 )
 
-type error1 struct {
+var (
+	slogger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		AddSource: true,
+		Level:     slog.LevelDebug,
+	}))
+)
+
+type ErrType struct {
+	Msg string
 }
 
-func (*error1) Error() string {
-	return "error 1"
+func (e *ErrType) Error() string {
+	return e.Msg
 }
 
-func Error1() error {
-	return &error1{}
+func CreateError() error {
+	return &ErrType{
+		Msg: "msg",
+	}
 }
 
 func temp() interface{} {
-	err := Error1()
+	err := CreateError()
 	return &err
 }
 
@@ -28,6 +39,9 @@ func main() {
 	err3 := errors.Wrapf(err2, "err 3")
 	// fmt.Printf("%+v\n", err1)
 	// fmt.Printf("%+v\n", err2)
-	fmt.Printf("%+v\n", err3)
+	// fmt.Printf("%+v\n", err3)
+	// fmt.Printf("%+v\n", errors.Unwrap(err3))
+	// fmt.Printf("%+v\n", (err3))
 
+	slogger.Debug("hey", "err", err3, "?", temp())
 }
