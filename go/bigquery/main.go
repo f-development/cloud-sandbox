@@ -134,7 +134,7 @@ func writeCsv(file string) {
 func loadTable(wg *sync.WaitGroup, table string) error {
 	defer wg.Done()
 	slog.Info("Load job", "table", table)
-	err := importCSVFromFile(gcpProject, dataset, table, "temp.csv")
+	err := importCSVFromFile(gcpProject, dataset, table, "bigquery/temp.csv")
 	if err != nil {
 		slog.Error("Load job error", "err", err)
 		return err
@@ -152,7 +152,7 @@ func loadJob() {
 }
 
 func main() {
-	// writeCsv("temp.csv")
+	// writeCsv("bigquery/temp.csv")
 	loadJob()
 }
 
