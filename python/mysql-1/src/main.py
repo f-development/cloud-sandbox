@@ -1,7 +1,7 @@
 import random
 
-num_groups = 10
-num_people = 10 * 10
+num_groups = 1000
+num_people = 100 * 1000
 entry_per_person = 10
 
 
@@ -12,20 +12,27 @@ def do():
         for j in range(entry_per_person):
             rows.append((i % num_groups, i, random.randint(0, 10000000)))
 
-    return  rows
+    return rows
+
 
 def insert_statement(rows, table):
     # print(rows)
     vals = ",".join([f"('{row[0]}', '{row[1]}', '{row[2]}')" for row in rows])
     return f"INSERT INTO {table} (`group`, `person`, `created_at`) VALUES {vals};"
 
+
 rows = do()
-# print(rows)
-
-query = insert_statement(rows, 'test.test1')
-print(query)
 
 
-f = open("insert.sql", "w")
-f.write(query)
-f.close()
+batch_size = 1000
+
+with open("insert.sql", "w") as f:
+    f.truncate()
+    f.write('truncate table test.test1;')
+
+    for i in range(0, len(rows), batch_size):
+        rs = rows[i : i + batch_size]
+        query = insert_statement(rows, "test.test1")
+        f.write(query)
+
+    f.close()
