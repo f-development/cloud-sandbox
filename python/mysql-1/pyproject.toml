@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "test"
+name = "src"
 version = "0.1.0"
 description = ""
 authors = ["KEEWOONG NAM <keewoong.nam@flicspy.com>"]
