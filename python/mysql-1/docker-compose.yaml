@@ -1,0 +1,14 @@
+version: "3"
+
+services:
+  mysql:
+    image: mysql:5.7
+    platform: linux/amd64
+    environment:
+      - MYSQL_ROOT_PASSWORD=password
+    volumes:
+      - ./volume/data:/var/lib/mysql
+      - ./volume/conf/:/etc/mysql/conf.d
+    ports:
+      - 13307:3306
+    restart: always

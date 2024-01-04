@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/csv"
+	"fmt"
 	"log"
 	"log/slog"
 	"math/rand"
@@ -20,6 +21,7 @@ var (
 		Level:     slog.LevelDebug,
 	}))
 	tables = []string{"perf_test", "perf_test_partition", "perf_test_clustering", "perf_test_partition_clustering"}
+	// tables = []string{"perf_test_partition_clustering"}
 )
 
 type Row struct {
@@ -29,19 +31,16 @@ type Row struct {
 }
 
 const (
-	dataset           = "flicspy_stg_1_ms_content"
-	gcpProject        = "f-development"
-	partitionCount    = 4000
-	recipientCount    = 4000 * 1000
-	rowsPerRecipients = 1
+	dataset               = "flicspy_stg_1_ms_content"
+	gcpProject            = "f-development"
+	partitionCount        = 10
+	recipientCount        = 1000 * 100
+	rowsPerRecipients     = 1000
 
-	totalRows              = recipientCount * rowsPerRecipients
-	partitionSize          = totalRows / partitionCount
-	recipientsPerPartition = 1000
+	totalRows = recipientCount * rowsPerRecipients
 
-	threadCount = 100
-	batchSize   = 10000
-	iteration   = totalRows / batchSize / threadCount
+	batchSize   = 100000
+	iteration   = totalRows / batchSize
 )
 
 func doInsert(cli *bigquery.Client, rows []Row) error {
@@ -57,16 +56,74 @@ func doInsert(cli *bigquery.Client, rows []Row) error {
 	return nil
 }
 
-func writeCsv() {
-	records := [][]string{
-		{"first_name", "last_name", "username"},
-		{"Rob", "Pike", "rob"},
-		{"Ken", "Thompson", "ken"},
-		{"Robert", "Griesemer", "gri"},
+func importCSVFromFile(projectID, datasetID, tableID, filename string) error {
+	// projectID := "my-project-id"
+	// datasetID := "mydataset"
+	// tableID := "mytable"
+	ctx := context.Background()
+	client, err := bigquery.NewClient(ctx, projectID)
+	if err != nil {
+		return fmt.Errorf("bigquery.NewClient: %v", err)
 	}
+	defer client.Close()
 
-	w := csv.NewWriter(os.Stdout)
-	w.WriteAll(records) // calls Flush internally
+	// f, err := os.Open(filename)
+	// if err != nil {
+	// 	return err
+	// }
+	// source := bigquery.NewReaderSource(f)
+	source := bigquery.NewGCSReference("gs://test-tokyo/temp.csv")
+	// source.AutoDetect = true   // Allow BigQuery to determine schema.
+	source.SkipLeadingRows = 1 // CSV has a single header line.
+
+	loader := client.Dataset(datasetID).Table(tableID).LoaderFrom(source)
+
+	slog.Info("Start job")
+	job, err := loader.Run(ctx)
+	if err != nil {
+		return err
+	}
+	slog.Info("Wait job")
+	status, err := job.Wait(ctx)
+	if err != nil {
+		return err
+	}
+	slog.Info("Wait job finished")
+	if err := status.Err(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func writeCsv(file string) {
+	f, err := os.Create(file)
+	f.Truncate(0)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	w := csv.NewWriter(f)
+
+	w.Write([]string{"recipient", "recipient_hash", "created_at"})
+	for i := 0; i < iteration; i++ {
+		arr := [][]string{}
+		p1 := time.Now()
+		for j := 0; j < batchSize; j++ {
+			r := rand.Int()
+			recipient := r % recipientCount
+			arr = append(arr, []string{strconv.Itoa(recipient), strconv.Itoa(recipient % partitionCount), strconv.Itoa(rand.Int())})
+
+		}
+
+		w.WriteAll(arr)
+
+		p2 := time.Now()
+		slog.Info("Batch finished", "iter", i, "throughput", batchSize/p2.Sub(p1).Seconds())
+		if err != nil {
+			slog.Error("err", "err", err)
+		}
+	}
 
 	if err := w.Error(); err != nil {
 		log.Fatalln("error writing csv:", err)
@@ -74,39 +131,28 @@ func writeCsv() {
 
 }
 
-func main() {
-	cli, err := bigquery.NewClient(context.Background(), gcpProject)
-
+func loadTable(wg *sync.WaitGroup, table string) error {
+	defer wg.Done()
+	slog.Info("Load job", "table", table)
+	err := importCSVFromFile(gcpProject, dataset, table, "temp.csv")
 	if err != nil {
-		panic(err)
+		slog.Error("Load job error", "err", err)
+		return err
 	}
+	return nil
+}
 
-	wg := sync.WaitGroup{}
-
-	for t := 0; t < threadCount; t++ {
+func loadJob() {
+	var wg sync.WaitGroup
+	for _, table := range tables {
 		wg.Add(1)
-		go func(wg *sync.WaitGroup, t int) {
-			defer wg.Done()
-			for i := 0; i < iteration; i++ {
-				arr := []Row{}
-				p1 := time.Now()
-				for j := 0; j < batchSize; j++ {
-					r := rand.Int()
-					recipient := r % recipientCount
-					arr = append(arr, Row{
-						Recipient:     strconv.Itoa(recipient),
-						RecipientHash: strconv.Itoa(recipient % partitionCount),
-						CreatedAt:     strconv.Itoa(rand.Int()),
-					})
-				}
-				doInsert(cli, arr)
-				p2 := time.Now()
-				slog.Info("Batch finished", "thread", t, "iter", i, "throughput", batchSize/p2.Sub(p1).Seconds())
-				if err != nil {
-					slog.Error("err", "err", err)
-				}
-			}
-		}(&wg, t)
+		go loadTable(&wg, table)
 	}
 	wg.Wait()
 }
+
+func main() {
+	// writeCsv("temp.csv")
+	loadJob()
+}
+
